@@ -13,7 +13,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useBookings } from '@/lib/hooks/use-data'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { useBookings, useCaregivers } from '@/lib/hooks/use-data'
+import { toast } from 'sonner'
 import {
   Clock,
   AlertTriangle,
@@ -30,6 +42,7 @@ import {
   X,
   Check,
   Edit2,
+  RefreshCw,
 } from 'lucide-react'
 
 const STATUS_COLORS = {
@@ -52,7 +65,28 @@ const DISPUTE_SEVERITY_COLORS = {
 }
 
 export default function BookingDetailPage({ booking }: { booking: any }) {
+  const { requestReplacement } = useBookings()
+  const { caregivers } = useCaregivers()
   const [activeSection, setActiveSection] = useState<'overview' | 'payment' | 'checkin' | 'replacement' | 'dispute' | 'activity' | 'review'>('overview')
+  
+  const [isReplacementOpen, setIsReplacementOpen] = useState(false)
+  const [replacementReason, setReplacementReason] = useState('')
+  const [selectedCaregiverId, setSelectedCaregiverId] = useState('')
+
+  const eligibleReplacementCaregivers = caregivers.filter(c => 
+    c.id !== booking.caregiverId && 
+    c.status === 'Active' && 
+    c.serviceTypes.includes(booking.serviceType)
+  )
+
+  const handleReplacement = () => {
+    const cg = caregivers.find(c => c.id === selectedCaregiverId)
+    if (!cg) return
+    
+    requestReplacement(booking.id, selectedCaregiverId, cg.name, replacementReason)
+    setIsReplacementOpen(false)
+    toast.success(`Replacement requested: ${cg.name}`)
+  }
 
   return (
     <div className="grid grid-cols-3 gap-6">
@@ -466,10 +500,77 @@ export default function BookingDetailPage({ booking }: { booking: any }) {
               </Button>
             )}
             {booking.status === 'Active' && (
-              <Button className="w-full" variant="outline" className="text-purple-600">
-                <ArrowRight className="h-4 w-4 mr-2" />
-                Request Replacement
-              </Button>
+              <Dialog open={isReplacementOpen} onOpenChange={setIsReplacementOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full text-purple-600 border-purple-200 hover:bg-purple-50" variant="outline">
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Request Replacement
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Request Emergency Replacement</DialogTitle>
+                    <DialogDescription>
+                      This will swap the current caregiver and apply a strike to their profile.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Reason for Replacement</label>
+                      <Select value={replacementReason} onValueChange={setReplacementReason}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="No-show">No-show / Abandonment</SelectItem>
+                          <SelectItem value="Late">Excessive tardiness</SelectItem>
+                          <SelectItem value="Professionalism">Professionalism issue</SelectItem>
+                          <SelectItem value="Competency">Competency concern</SelectItem>
+                          <SelectItem value="Emergency">Caregiver emergency</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {replacementReason === 'Other' && (
+                      <Input placeholder="Specify reason..." />
+                    )}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Available Replacement ({booking.serviceType})</label>
+                      <Select value={selectedCaregiverId} onValueChange={setSelectedCaregiverId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select replacement" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleReplacementCaregivers.map(cg => (
+                            <SelectItem key={cg.id} value={cg.id}>
+                              {cg.name} ({cg.rating}★)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {eligibleReplacementCaregivers.length === 0 && (
+                        <p className="text-xs text-red-500">No active {booking.serviceType}s available right now.</p>
+                      )}
+                    </div>
+                    <div className="p-3 bg-rose-50 rounded-lg border border-rose-100 flex gap-3">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0" />
+                      <p className="text-xs text-rose-700">
+                        Applying a replacement triggers a 1.5x surge rate for the new caregiver (Emergency Surcharge).
+                      </p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsReplacementOpen(false)}>Cancel</Button>
+                    <Button 
+                      onClick={handleReplacement}
+                      disabled={!selectedCaregiverId || !replacementReason}
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                      Confirm Replacement
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </Card>

@@ -91,10 +91,10 @@ export default function CarePlanDetailPage({ params }: { params: Promise<{ id: s
                 {carePlan.activeServices.map((booking) => (
                   <div key={booking.id} className="p-4 border rounded-lg hover:bg-gray-50 relative overflow-hidden">
                     {/* Left accent border for care plan grouping */}
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#B91C4E]"></div>
                     <div className="ml-2">
                       <div className="flex items-center gap-2 mb-2">
-                        <Badge variant={booking.serviceType === 'CNA' ? 'default' : 'secondary'}>
+                        <Badge className={booking.serviceType === 'CNA' ? 'bg-rose-100 text-[#B91C4E] border-rose-200' : 'bg-gray-100 text-gray-800'}>
                           {booking.serviceType}
                         </Badge>
                         {booking.taskType && (
@@ -166,9 +166,9 @@ export default function CarePlanDetailPage({ params }: { params: Promise<{ id: s
           <Card className="p-6">
             <h3 className="font-bold text-gray-900 mb-4">Plan Summary</h3>
             <div className="space-y-4">
-              <div className="p-3 bg-blue-50 rounded">
+              <div className="p-3 bg-rose-50/50 rounded">
                 <p className="text-sm text-gray-600">Active Services</p>
-                <p className="text-3xl font-bold text-blue-600 mt-1">{carePlan.activeServices.length}</p>
+                <p className="text-3xl font-bold text-[#B91C4E] mt-1">{carePlan.activeServices.length}</p>
               </div>
               <div className="p-3 bg-green-50 rounded">
                 <p className="text-sm text-gray-600">Monthly Cost</p>

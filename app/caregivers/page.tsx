@@ -15,7 +15,27 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useCaregivers } from '@/lib/hooks/use-data'
-import { Search, Plus, LayoutGrid, LayoutList, ChevronDown } from 'lucide-react'
+import { Search, Plus, LayoutGrid, LayoutList, ChevronDown, Check } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
+
+import { Checkbox } from "@/components/ui/checkbox"
 
 export default function CaregiversPage() {
   const { caregivers } = useCaregivers()
@@ -28,6 +48,8 @@ export default function CaregiversPage() {
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'unavailable'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
   const [selectedCaregivers, setSelectedCaregivers] = useState<Set<string>>(new Set())
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const filtered = useMemo(() => {
     return caregivers.filter((cg) => {
@@ -66,18 +88,146 @@ export default function CaregiversPage() {
     }
     return dots
   }
+  const handleAddCaregiver = (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    // Simulate API call
+    setTimeout(() => {
+      setIsSubmitting(false)
+      setIsAddDialogOpen(false)
+      toast.success("Caregiver has been added successfully", {
+        description: "They will receive an invitation email to complete their profile.",
+      })
+    }, 1500)
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Caregivers</h1>
-          <p className="text-gray-600">Manage all caregivers and their profiles</p>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Caregivers</h1>
+          <p className="text-gray-500">Manage all caregivers and their profiles</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Caregiver
-        </Button>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#B91C4E] hover:bg-[#a01844] text-white shadow-lg shadow-rose-100 transition-all active:scale-95">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Caregiver
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[525px] border-none shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">Add New Caregiver</DialogTitle>
+              <DialogDescription>
+                Enter the details for the new caregiver. They will be notified via email.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddCaregiver} className="space-y-6 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input id="firstName" placeholder="e.g. Sarah" required className="border-gray-200 focus:ring-[#B91C4E]" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input id="lastName" placeholder="e.g. Johnson" required className="border-gray-200 focus:ring-[#B91C4E]" />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input id="email" type="email" placeholder="sarah.j@example.com" required className="border-gray-200 focus:ring-[#B91C4E]" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input id="phone" placeholder="(555) 000-0000" className="border-gray-200 focus:ring-[#B91C4E]" />
+                </div>
+                <div className="space-y-4">
+                  <Label>Service Types</Label>
+                  <div className="flex gap-6">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox id="cna" defaultChecked />
+                      <Label htmlFor="cna" className="text-sm font-normal cursor-pointer">CNA</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox id="hha" />
+                      <Label htmlFor="hha" className="text-sm font-normal cursor-pointer">HHA</Label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="languages">Languages</Label>
+                  <Select defaultValue="english">
+                    <SelectTrigger id="languages" className="border-gray-200 focus:ring-[#B91C4E]">
+                      <SelectValue placeholder="Select languages" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="english">English</SelectItem>
+                      <SelectItem value="spanish">Spanish</SelectItem>
+                      <SelectItem value="both">English & Spanish</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org">Organization</Label>
+                  <Select defaultValue="independent">
+                    <SelectTrigger id="org" className="border-gray-200 focus:ring-[#B91C4E]">
+                      <SelectValue placeholder="Select organization" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="independent">Independent</SelectItem>
+                      <SelectItem value="1">City Health Care</SelectItem>
+                      <SelectItem value="2">Wellness Services</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs uppercase tracking-wider text-gray-500 font-bold">Verification Requirements</Label>
+                <div className="grid grid-cols-2 gap-y-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="req1" />
+                    <Label htmlFor="req1" className="text-xs font-normal cursor-pointer">Background Check</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="req2" />
+                    <Label htmlFor="req2" className="text-xs font-normal cursor-pointer">Certifications</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="req3" />
+                    <Label htmlFor="req3" className="text-xs font-normal cursor-pointer">Drug Test</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox id="req4" />
+                    <Label htmlFor="req4" className="text-xs font-normal cursor-pointer">Reference Check</Label>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-4 gap-2 sm:gap-0">
+                <Button type="button" variant="ghost" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-[#B91C4E] hover:bg-[#a01844] text-white min-w-[120px]" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Adding...
+                    </span>
+                  ) : "Create Profile"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="p-6">

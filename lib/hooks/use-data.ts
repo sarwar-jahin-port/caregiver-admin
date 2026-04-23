@@ -404,6 +404,21 @@ interface CarePlan {
   lastModified: string
 }
 
+interface Transaction {
+  id: string
+  bookingId: string
+  clientName: string
+  caregiverName: string
+  totalAmount: number
+  platformFee: number // 15%
+  caregiverPayout: number // 85%
+  status: 'Escrow' | 'Ready' | 'Paid' | 'Refunded' | 'Disputed'
+  createdAt: string
+  expectedPayoutDate: string // Completion + 24h
+  actualPayoutDate?: string
+  adjustments?: { type: 'Tip' | 'Overage' | 'Penalty' | 'Fee Adjustment'; amount: number; reason: string }[]
+}
+
 interface Organization {
   id: string
   name: string
@@ -1697,7 +1712,7 @@ export function useCaregivers() {
 }
 
 export function useBookings() {
-  const [bookings] = useState<Booking[]>(mockBookings)
+  const [bookings, setBookings] = useState<Booking[]>(mockBookings)
 
   const getActiveBookings = useMemo(
     () => () => bookings.filter(b => b.status === 'In Progress' || b.status === 'Scheduled'),
@@ -1714,11 +1729,103 @@ export function useBookings() {
     [bookings]
   )
 
+  const updateBooking = (id: string, updates: Partial<Booking>) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b))
+  }
+
+  const updateSeries = (seriesId: string, updates: Partial<Booking>) => {
+    setBookings(prev => prev.map(b => b.recurringSeriesId === seriesId ? { ...b, ...updates } : b))
+  }
+
+  // Financial Actions
+  const processRefund = (id: string, amount: number, reason: string) => {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const newPayment: PaymentRecord = {
+        id: `REF-${Math.random().toString(36).substr(2, 9)}`,
+        amount: -amount,
+        status: 'Processed',
+        processedAt: new Date().toISOString(),
+        method: 'Bank Transfer',
+        notes: `Refund: ${reason}`
+      }
+      return { 
+        ...b, 
+        status: amount >= (b.finalRate * b.totalHours) ? 'Cancelled' : b.status,
+        payment: [...b.payment, newPayment],
+        activityLog: [...b.activityLog, {
+          timestamp: new Date().toISOString(),
+          action: 'Refund Processed',
+          performedBy: 'Admin',
+          details: `${reason} - $${amount} refunded`
+        }]
+      }
+    }))
+  }
+
+  const completeServiceWithPayout = (id: string, actualHours: number) => {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== id) return b
+      
+      const totalAmount = b.finalRate * b.totalHours
+      const caregiverPayout = totalAmount * 0.85 // 85% payout
+      const platformFee = totalAmount * 0.15 // 15% commission
+
+      return {
+        ...b,
+        status: 'Completed',
+        activityLog: [...b.activityLog, {
+          timestamp: new Date().toISOString(),
+          action: 'Service Completed',
+          performedBy: 'System',
+          details: `Payout calculated: Caregiver gets $${caregiverPayout.toFixed(2)}, Platform keeps $${platformFee.toFixed(2)}`
+        }]
+      }
+    }))
+  }
+
+  const requestReplacement = (bookingId: string, replacementCaregiverId: string, replacementCaregiverName: string, reason: string) => {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      
+      const newReplacementEvent: ReplacementEvent = {
+        originalCaregiverId: b.caregiverId,
+        originalCaregiverName: b.caregiverName || 'Unknown',
+        replacementCaregiverId,
+        replacementCaregiverName,
+        reason,
+        strikeApplied: 1, // Automatic strike for replacement request
+        surgeMultiplier: 1.5, // Emergency replacement surge
+        surgeRate: b.finalRate * 1.5,
+        createdAt: new Date().toISOString().split('T')[0]
+      }
+
+      return {
+        ...b,
+        status: 'Replacement In Progress',
+        caregiverId: replacementCaregiverId,
+        caregiverName: replacementCaregiverName,
+        replacementHistory: [...b.replacementHistory, newReplacementEvent],
+        activityLog: [...b.activityLog, {
+          timestamp: new Date().toISOString(),
+          action: 'Replacement Requested',
+          performedBy: 'Admin',
+          details: `Requested replacement: ${replacementCaregiverName}. Reason: ${reason}`
+        }]
+      }
+    }))
+  }
+
   return {
     bookings,
     getActiveBookings,
     getDisruptedBookings,
     getBookingById,
+    updateBooking,
+    updateSeries,
+    processRefund,
+    completeServiceWithPayout,
+    requestReplacement,
   }
 }
 
@@ -1911,7 +2018,7 @@ const mockApplications: CaregiverApplication[] = [
 ]
 
 export function useCaregiverApplications() {
-  const [applications] = useState<CaregiverApplication[]>(mockApplications)
+  const [applications, setApplications] = useState<CaregiverApplication[]>(mockApplications)
 
   const getApplicationById = useMemo(
     () => (id: string) => applications.find(app => app.id === id),
@@ -1928,11 +2035,64 @@ export function useCaregiverApplications() {
     [applications]
   )
 
+  const updateApplication = (id: string, updates: Partial<CaregiverApplication>) => {
+    setApplications(prev => prev.map(app => 
+      app.id === id ? { ...app, ...updates } : app
+    ))
+  }
+
+  const updateStage = (id: string, stageName: CaregiverApplication['currentStage'], status: ApplicationStage['status'], notes?: string) => {
+    setApplications(prev => prev.map(app => {
+      if (app.id !== id) return app
+
+      const now = new Date().toISOString()
+      const newStage: ApplicationStage = {
+        stage: stageName,
+        status: status,
+        completedAt: status === 'Completed' ? now : undefined,
+        notes: notes
+      }
+
+      // Update history: if stage exists, update it, otherwise add it
+      const existingStageIndex = app.stageHistory.findIndex(s => s.stage === stageName)
+      let newHistory = [...app.stageHistory]
+      
+      if (existingStageIndex >= 0) {
+        newHistory[existingStageIndex] = { ...newHistory[existingStageIndex], ...newStage }
+      } else {
+        newHistory.push(newStage)
+      }
+
+      // Calculate progress based on stage
+      const stages = [
+        'Application Submitted',
+        'Initial Screening',
+        'Document Review',
+        'Background Check',
+        'Interview Scheduled',
+        'Interview Completed',
+        'Final Review',
+        'Approved'
+      ]
+      const currentIdx = stages.indexOf(stageName)
+      const progress = Math.min(100, Math.round(((currentIdx + (status === 'Completed' ? 1 : 0.5)) / stages.length) * 100))
+
+      return {
+        ...app,
+        currentStage: stageName,
+        stageHistory: newHistory,
+        onboardingProgress: progress
+      }
+    }))
+  }
+
   return {
     applications,
     getApplicationById,
     getApplicationsByStage,
     getPendingApplications,
+    updateApplication,
+    updateStage,
   }
 }
 
@@ -2015,4 +2175,189 @@ export function useClients() {
   }
 }
 
-export type { Client, CareRecipient, ClientFlag, ClientPaymentMethod, ClientBillingRecord, ClientReview, CaregiverReviewOfClient, ClientCommunication, AdminNote }
+const mockTransactions: Transaction[] = [
+  {
+    id: 'TXN-001',
+    bookingId: 'BK-001',
+    clientName: 'Robert Fox',
+    caregiverName: 'Sarah Johnson',
+    totalAmount: 200,
+    platformFee: 30,
+    caregiverPayout: 170,
+    status: 'Paid',
+    createdAt: '2024-04-10',
+    expectedPayoutDate: '2024-04-11',
+    actualPayoutDate: '2024-04-11',
+  },
+  {
+    id: 'TXN-002',
+    bookingId: 'BK-002',
+    clientName: 'Jane Cooper',
+    caregiverName: 'Emily Chen',
+    totalAmount: 150,
+    platformFee: 22.5,
+    caregiverPayout: 127.5,
+    status: 'Ready',
+    createdAt: '2024-04-20',
+    expectedPayoutDate: '2024-04-22',
+  },
+  {
+    id: 'TXN-003',
+    bookingId: 'BK-003',
+    clientName: 'Cody Fisher',
+    caregiverName: 'Sarah Johnson',
+    totalAmount: 45,
+    platformFee: 6.75,
+    caregiverPayout: 38.25,
+    status: 'Ready',
+    createdAt: '2024-04-21',
+    expectedPayoutDate: '2024-04-23',
+    adjustments: [
+      { type: 'Penalty', amount: 45, reason: 'Late Cancellation Penalty (1hr charge)' }
+    ]
+  },
+  {
+    id: 'TXN-004',
+    bookingId: 'BK-004',
+    clientName: 'Esther Howard',
+    caregiverName: 'Maria Garcia',
+    totalAmount: 320,
+    platformFee: 48,
+    caregiverPayout: 272,
+    status: 'Escrow',
+    createdAt: '2024-04-22',
+    expectedPayoutDate: '2024-04-25',
+    adjustments: [
+      { type: 'Overage', amount: 80, reason: '2 Hours Overage (Emergency stay)' }
+    ]
+  },
+  {
+    id: 'TXN-005',
+    bookingId: 'BK-005',
+    clientName: 'Cameron Williamson',
+    caregiverName: 'James Wilson',
+    totalAmount: 180,
+    platformFee: 0,
+    caregiverPayout: 180,
+    status: 'Ready',
+    createdAt: '2024-04-22',
+    expectedPayoutDate: '2024-04-24',
+    adjustments: [
+      { type: 'Fee Adjustment', amount: 0, reason: 'Platform Fee Waived (Promotional)' }
+    ]
+  },
+  {
+    id: 'TXN-006',
+    bookingId: 'BK-006',
+    clientName: 'Jenny Wilson',
+    caregiverName: 'Sarah Johnson',
+    totalAmount: 120,
+    platformFee: 18,
+    caregiverPayout: 102,
+    status: 'Refunded',
+    createdAt: '2024-04-15',
+    expectedPayoutDate: '2024-04-17',
+    adjustments: [
+      { type: 'Penalty', amount: -60, reason: 'Early Checkout (Finished 2 hrs early)' }
+    ]
+  },
+  {
+    id: 'TXN-007',
+    bookingId: 'BK-007',
+    clientName: 'Guy Hawkins',
+    caregiverName: 'Maria Garcia',
+    totalAmount: 250,
+    platformFee: 37.5,
+    caregiverPayout: 212.5,
+    status: 'Disputed',
+    createdAt: '2024-04-20',
+    expectedPayoutDate: '2024-04-22',
+    adjustments: [
+      { type: 'Penalty', amount: 0, reason: 'Quality Issue: Client reported poor care' }
+    ]
+  },
+  {
+    id: 'TXN-008',
+    bookingId: 'BK-008',
+    clientName: 'Leslie Alexander',
+    caregiverName: 'Emily Chen + Replacement',
+    totalAmount: 400,
+    platformFee: 60,
+    caregiverPayout: 340,
+    status: 'Escrow',
+    createdAt: '2024-04-23',
+    expectedPayoutDate: '2024-04-26',
+    adjustments: [
+      { type: 'Penalty', amount: 0, reason: 'Split Payout: Caregiver A (3h), Replacement (5h)' }
+    ]
+  },
+  {
+    id: 'TXN-009',
+    bookingId: 'BK-009',
+    clientName: 'Theresa Webb',
+    caregiverName: 'James Wilson',
+    totalAmount: 200,
+    platformFee: 30,
+    caregiverPayout: 220,
+    status: 'Ready',
+    createdAt: '2024-04-23',
+    expectedPayoutDate: '2024-04-25',
+    adjustments: [
+      { type: 'Tip', amount: 50, reason: 'Post-service Tip from Client' }
+    ]
+  }
+]
+
+export function useTransactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions)
+
+  const stats = useMemo(() => {
+    const totalVolume = transactions.reduce((sum, t) => sum + t.totalAmount, 0)
+    const platformRevenue = transactions.filter(t => t.status === 'Paid').reduce((sum, t) => sum + t.platformFee, 0)
+    const pendingPayouts = transactions.filter(t => t.status === 'Ready' || t.status === 'Escrow').reduce((sum, t) => sum + t.caregiverPayout, 0)
+    const activeDisputes = transactions.filter(t => t.status === 'Disputed').length
+
+    return {
+      totalVolume,
+      platformRevenue,
+      pendingPayouts,
+      activeDisputes
+    }
+  }, [transactions])
+
+  const confirmPayout = (id: string) => {
+    setTransactions(prev => prev.map(t => 
+      t.id === id ? { ...t, status: 'Paid', actualPayoutDate: new Date().toISOString() } : t
+    ))
+  }
+
+  const processRefund = (id: string, amount: number) => {
+    setTransactions(prev => prev.map(t => 
+      t.id === id ? { ...t, status: 'Refunded', totalAmount: t.totalAmount - amount } : t
+    ))
+  }
+
+  const addAdjustment = (id: string, type: Transaction['adjustments'][0]['type'], amount: number, reason: string) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== id) return t
+      const newTotal = t.totalAmount + amount
+      return {
+        ...t,
+        totalAmount: newTotal,
+        platformFee: newTotal * 0.15,
+        caregiverPayout: newTotal * 0.85,
+        adjustments: [...(t.adjustments || []), { type, amount, reason }]
+      }
+    }))
+  }
+
+  return {
+    transactions,
+    stats,
+    confirmPayout,
+    processRefund,
+    addAdjustment,
+  }
+}
+
+export type { Client, CareRecipient, ClientFlag, ClientPaymentMethod, ClientBillingRecord, ClientReview, CaregiverReviewOfClient, ClientCommunication, AdminNote, Transaction }

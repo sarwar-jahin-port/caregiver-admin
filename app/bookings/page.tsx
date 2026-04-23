@@ -14,8 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useBookings, useCaregivers } from '@/lib/hooks/use-data'
-import { Search, Plus, Calendar } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { useBookings, useCaregivers, useClients } from '@/lib/hooks/use-data'
+import { Search, Plus, Calendar, ArrowRight, UserPlus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 const STATUS_COLORS: Record<string, string> = {
   'Scheduled': 'bg-blue-100 text-blue-800',
@@ -26,13 +36,26 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function BookingsPage() {
+  const router = useRouter()
   const { bookings } = useBookings()
   const { caregivers } = useCaregivers()
+  const { clients } = useClients()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [serviceFilter, setServiceFilter] = useState<'all' | 'CNA' | 'HHA'>('all')
   const [sourceFilter, setSourceFilter] = useState<'all' | 'independent' | 'org'>('all')
   const [surgeFilter, setSurgeFilter] = useState<'all' | 'surge'>('all')
+  
+  const [isNewBookingOpen, setIsNewBookingOpen] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch) return clients.slice(0, 5)
+    return clients.filter(c => 
+      c.fullName.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      c.id.toLowerCase().includes(clientSearch.toLowerCase())
+    ).slice(0, 5)
+  }, [clients, clientSearch])
 
   const filtered = useMemo(() => {
     return bookings.filter((booking) => {
@@ -60,10 +83,74 @@ export default function BookingsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Bookings</h1>
           <p className="text-gray-600">View and manage all service bookings</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Booking
-        </Button>
+        
+        <Dialog open={isNewBookingOpen} onOpenChange={setIsNewBookingOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#B91C4E] hover:bg-[#A01844] text-white font-bold shadow-lg shadow-rose-100">
+              <Plus className="h-4 w-4 mr-2" />
+              New Booking
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create New Booking</DialogTitle>
+              <DialogDescription>
+                Select a client to start the booking process.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search clients..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="pl-10 h-11 border-gray-100"
+                />
+              </div>
+
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                {filteredClients.map((client) => (
+                  <div 
+                    key={client.id}
+                    className="flex items-center justify-between p-4 border rounded-xl hover:bg-rose-50/50 cursor-pointer transition-all group border-gray-100"
+                    onClick={() => {
+                      setIsNewBookingOpen(false)
+                      router.push(`/bookings/recurring/create?clientId=${client.id}`)
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-[#B91C4E] font-bold">
+                        {client.fullName.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 group-hover:text-[#B91C4E] transition-colors">{client.fullName}</p>
+                        <p className="text-xs text-gray-500 font-mono italic">{client.id}</p>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-[#B91C4E] group-hover:translate-x-1 transition-all" />
+                  </div>
+                ))}
+                {filteredClients.length === 0 && (
+                  <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed text-gray-400 text-sm">
+                    No clients found.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="sm:justify-between pt-4 border-t">
+              <Button variant="ghost" onClick={() => setIsNewBookingOpen(false)} className="text-gray-500">Cancel</Button>
+              <Link href="/clients">
+                <Button variant="outline" className="border-[#B91C4E] text-[#B91C4E] hover:bg-rose-50 font-bold">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create New Client
+                </Button>
+              </Link>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="p-6">

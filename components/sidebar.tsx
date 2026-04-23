@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { Heart, Users, Calendar, Briefcase, ClipboardList, AlertTriangle, Sliders, ChevronDown, FileCheck, AlertCircle, Activity, Repeat2, Scale, UserCircle, Flag } from 'lucide-react'
+import { Heart, Users, Calendar, Briefcase, ClipboardList, AlertTriangle, Sliders, ChevronDown, FileCheck, AlertCircle, Activity, Repeat2, Scale, UserCircle, Flag, CreditCard } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 export function Sidebar() {
@@ -66,6 +66,11 @@ export function Sidebar() {
       href: '/organizations',
       icon: Briefcase,
     },
+    {
+      label: 'Payments',
+      href: '/payments',
+      icon: CreditCard,
+    },
   ]
 
   return (
@@ -85,23 +90,22 @@ export function Sidebar() {
         {navItems.map((item: any) => {
           const Icon = item.icon
           const active = item.href ? isActive(item.href) : expandedMenus[item.label.toLowerCase()]
-          
+
           if (item.submenu) {
             return (
               <div key={item.label}>
                 <button
                   onClick={() => toggleMenu(item.label.toLowerCase())}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                    expandedMenus[item.label.toLowerCase()]
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${expandedMenus[item.label.toLowerCase()]
                       ? 'bg-purple-50 text-[#B91C4E]'
                       : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <Icon className="w-5 h-5" />
                   <span className="flex-1 text-left">{item.label}</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${expandedMenus[item.label.toLowerCase()] ? 'rotate-180' : ''}`} />
                 </button>
-                
+
                 {expandedMenus[item.label.toLowerCase()] && (
                   <div className="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-0">
                     {item.subItems.map((subItem: any) => {
@@ -111,11 +115,10 @@ export function Sidebar() {
                         <Link
                           key={subItem.href}
                           href={subItem.href}
-                          className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-colors ${
-                            subActive
+                          className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-colors ${subActive
                               ? 'bg-[#B91C4E] text-white'
                               : 'text-gray-600 hover:bg-gray-100'
-                          }`}
+                            }`}
                         >
                           <SubIcon className="w-4 h-4" />
                           <span className="flex-1">{subItem.label}</span>
@@ -130,16 +133,15 @@ export function Sidebar() {
               </div>
             )
           }
-          
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                active
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${active
                   ? 'bg-[#B91C4E] text-white'
                   : 'text-gray-700 hover:bg-gray-100'
-              }`}
+                }`}
             >
               <Icon className="w-5 h-5" />
               {item.label}

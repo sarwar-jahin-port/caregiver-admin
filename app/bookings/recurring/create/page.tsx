@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
@@ -28,7 +28,7 @@ import { toast } from 'sonner'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-export default function CreateRecurringSeriesPage() {
+function CreateRecurringSeriesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const clientId = searchParams.get('clientId')
@@ -435,5 +435,15 @@ export default function CreateRecurringSeriesPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function CreateRecurringSeriesPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#B91C4E]"></div>
+    </div>}>
+      <CreateRecurringSeriesContent />
+    </Suspense>
   )
 }
